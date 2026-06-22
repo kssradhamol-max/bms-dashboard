@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>BMS Monitor — Blesson</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0d1117;
+      color: white;
+      font-family: Arial, sans-serif;
+      padding: 30px;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 10px;
+      font-size: 24px;
+      color: #58a6ff;
+    }
+    .status-bar {
+      text-align: center;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+    .dot {
+      height: 12px;
+      width: 12px;
+      border-radius: 50%;
+      display: inline-block;
+      background: grey;
+      margin-right: 6px;
+    }
+    .cards {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+    .card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 16px;
+      padding: 30px 20px;
+      width: 160px;
+      text-align: center;
+    }
+    .card p {
+      font-size: 12px;
+      color: #8b949e;
+      margin-bottom: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .value {
+      font-size: 42px;
+      font-weight: bold;
+      color: #00ff88;
+    }
+    .unit {
+      font-size: 14px;
+      color: #8b949e;
+    }
+    .relay-card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 16px;
+      padding: 30px 20px;
+      width: 160px;
+      text-align: center;
+    }
+    .relay-value {
+      font-size: 28px;
+      font-weight: bold;
+      margin-top: 5px;
+    }
+    .relay-closed { color: #00ff88; }
+    .relay-open   { color: #ff4444; }
+
+    .soc-bar-container {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 16px;
+      padding: 20px 30px;
+      max-width: 600px;
+      margin: 0 auto 20px auto;
+    }
+    .soc-bar-container p {
+      font-size: 12px;
+      color: #8b949e;
+      margin-bottom: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .soc-bar {
+      background: #30363d;
+      border-radius: 8px;
+      height: 24px;
+      width: 100%;
+      overflow: hidden;
+    }
+    .soc-fill {
+      height: 100%;
+      width: 0%;
+      background: #00ff88;
+      border-radius: 8px;
+      transition: width 0.5s ease, background 0.5s ease;
+    }
+
+    .alert-box {
+      display: none;
+      background: #ff000022;
+      border: 2px solid red;
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      font-size: 18px;
+      font-weight: bold;
+      color: #ff6666;
+      max-width: 600px;
+      margin: 0 auto 14px auto;
+    }
+    .alert-box small {
+      display: block;
+      font-size: 13px;
+      font-weight: normal;
+      color: #ff9999;
+      margin-top: 6px;
+    }
+
+    .reject-box {
+      display: none;
+      background: #ffa50022;
+      border: 2px solid #ffa500;
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+      font-size: 15px;
+      font-weight: bold;
+      color: #ffcc80;
+      max-width: 600px;
+      margin: 0 auto 20px auto;
+    }
+    .reject-box small {
+      display: block;
+      font-size: 12.5px;
+      font-weight: normal;
+      color: #ffdca8;
+      margin-top: 5px;
+    }
+
+    .controls {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 16px;
+      padding: 20px 30px;
+      max-width: 600px;
+      margin: 0 auto 20px auto;
+      text-align: center;
+    }
+    .controls h3 {
+      color: #8b949e;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 5px;
+    }
+    .controls .hint {
+      color: #6e7d8a;
+      font-size: 10.5px;
+      margin-bottom: 14px;
+      font-style: italic;
+    }
+    .btn {
+      padding: 12px 22px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: bold;
+      margin: 6px;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn:active { transform: scale(0.96); }
+    .btn-ack    { background: #00ff88; color: black; }
+    .btn-beep   { background: #ffa500; color: black; }
+    .btn-open   { background: #ff4444; color: white; }
+    .btn-close  { background: #4488ff; color: white; }
+    .btn-red    { background: #ff4444; color: white; }
+    .btn-green  { background: #00ff88; color: black; }
+    .btn-blue   { background: #4488ff; color: white; }
+
+    .log {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 15px;
+      max-width: 600px;
+      margin: 0 auto;
+      font-size: 12px;
+      color: #8b949e;
+      height: 130px;
+      overflow-y: auto;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>⚡ Battery Cell Monitor — Blesson</h1>
+
+  <div class="status-bar">
+    <span class="dot" id="dot"></span>
+    <span id="status">Connecting to broker...</span>
+  </div>
+
+  <div class="cards">
+    <div class="card">
+      <p>Voltage</p>
+      <span class="value" id="volt">--</span>
+      <span class="unit">V</span>
+    </div>
+    <div class="card">
+      <p>Temperature</p>
+      <span class="value" id="temp">--</span>
+      <span class="unit">°C</span>
+    </div>
+    <div class="card">
+      <p>State of Charge</p>
+      <span class="value" id="soc">--</span>
+      <span class="unit">%</span>
+    </div>
+    <div class="relay-card">
+      <p>Relay Status</p>
+      <span class="relay-value relay-closed" id="relayStatus">--</span>
+    </div>
+  </div>
+
+  <div class="soc-bar-container">
+    <p>Battery Level</p>
+    <div class="soc-bar">
+      <div class="soc-fill" id="socFill"></div>
+    </div>
+  </div>
+
+  <div class="alert-box" id="alertBox"></div>
+  <div class="reject-box" id="rejectBox"></div>
+
+  <div class="controls">
+    <h3>Remote Control — Two Way Communication</h3>
+    <div class="hint">ACKNOWLEDGE re-checks the live reading on the device — it will be rejected if the fault is still present.</div>
+    <button onclick="sendCommand('ACKNOWLEDGE')" class="btn btn-ack">
+      ✅ Acknowledge &amp; Attempt Reset
+    </button>
+    <button onclick="sendCommand('BEEP')" class="btn btn-beep">
+      🔔 Trigger Beep
+    </button>
+    <br>
+    <button onclick="sendCommand('RELAY_OPEN')" class="btn btn-open">
+      ⚡ Open Relay (Disconnect)
+    </button>
+    <button onclick="sendCommand('RELAY_CLOSE')" class="btn btn-close">
+      🔒 Close Relay (Connect)
+    </button>
+    <br>
+    <button onclick="sendCommand('LED_RED')"   class="btn btn-red">🔴 Red</button>
+    <button onclick="sendCommand('LED_GREEN')" class="btn btn-green">🟢 Green</button>
+    <button onclick="sendCommand('LED_BLUE')"  class="btn btn-blue">🔵 Blue</button>
+  </div>
+
+  <div class="log" id="log"></div>
+
+  <script>
+    var client = new Paho.MQTT.Client(
+      "broker.hivemq.com", 8884,
+      "dashboard_" + Math.random().toString(16).substr(2, 8)
+    );
+
+    function addLog(msg) {
+      var log = document.getElementById("log");
+      var time = new Date().toLocaleTimeString();
+      log.innerHTML = "[" + time + "] " + msg + "<br>" + log.innerHTML;
+    }
+
+    client.onConnectionLost = function (e) {
+      document.getElementById("dot").style.background = "red";
+      document.getElementById("status").innerText = "Disconnected";
+      addLog("Connection lost: " + e.errorMessage);
+    };
+
+    client.onMessageArrived = function (message) {
+      var topic = message.destinationName;
+      var data = JSON.parse(message.payloadString);
+
+      if (topic === "bms/blesson/data") {
+        var v = parseFloat(data.voltage);
+        var t = parseFloat(data.temperature);
+        var s = parseFloat(data.soc);
+
+        document.getElementById("volt").innerText = v.toFixed(2);
+        document.getElementById("temp").innerText = t.toFixed(1);
+        document.getElementById("soc").innerText = Math.round(s);
+
+        var fill = document.getElementById("socFill");
+        fill.style.width = Math.round(s) + "%";
+        if (s > 60) fill.style.background = "#00ff88";
+        else if (s > 30) fill.style.background = "#ffa500";
+        else fill.style.background = "#ff4444";
+
+        if (data.relay) {
+          var relayEl = document.getElementById("relayStatus");
+          relayEl.innerText = data.relay;
+          relayEl.className = data.relay === "OPEN"
+            ? "relay-value relay-open"
+            : "relay-value relay-closed";
+        }
+
+        addLog("Data: " + v.toFixed(2) + "V | " + t.toFixed(1) + "°C | " +
+               Math.round(s) + "% | Relay: " + (data.relay || "--"));
+      }
+
+      if (topic === "bms/blesson/alert") {
+        var alertBox = document.getElementById("alertBox");
+        alertBox.style.display = "block";
+        alertBox.innerHTML = "⚠ ALERT: " + data.type +
+          (data.action ? "<small>" + data.action + "</small>" : "");
+        // a new alert means any old rejection note is stale — clear it
+        document.getElementById("rejectBox").style.display = "none";
+        addLog("ALERT: " + data.type);
+      }
+
+      if (topic === "bms/blesson/status") {
+        addLog("Status: " + JSON.stringify(data));
+
+        if (data.status === "ACK_REJECTED") {
+          var rejectBox = document.getElementById("rejectBox");
+          rejectBox.style.display = "block";
+          rejectBox.innerHTML = "⏳ ACKNOWLEDGE REJECTED — fault still present" +
+            "<small>" + data.reason +
+            (data.voltage ? " (voltage: " + data.voltage + "V" : "") +
+            (data.temperature ? ", temp: " + data.temperature + "°C)" : (data.voltage ? ")" : "")) +
+            "</small>";
+          // alert box stays visible — relay is still open
+        }
+
+        if (data.status === "RELAY_CLOSED" && data.fault === "CLEARED") {
+          document.getElementById("alertBox").style.display = "none";
+          document.getElementById("rejectBox").style.display = "none";
+          addLog("✅ Fault cleared — relay closed");
+        }
+      }
+    };
+
+    client.connect({
+      useSSL: true,
+      onSuccess: function () {
+        document.getElementById("dot").style.background = "#00ff88";
+        document.getElementById("status").innerText = "Connected to HiveMQ";
+        client.subscribe("bms/blesson/data");
+        client.subscribe("bms/blesson/alert");
+        client.subscribe("bms/blesson/status");
+        addLog("Subscribed to data, alert, and status topics");
+      },
+      onFailure: function (e) {
+        document.getElementById("dot").style.background = "red";
+        document.getElementById("status").innerText = "Connection failed";
+        addLog("Failed: " + e.errorMessage);
+      }
+    });
+
+    // ── Two way communication — send commands to ESP8266 ──
+    function sendCommand(command) {
+      if (client.isConnected()) {
+        var msg = new Paho.MQTT.Message(JSON.stringify({ command: command }));
+        msg.destinationName = "bms/blesson/command";
+        client.send(msg);
+        addLog("Command sent: " + command);
+      } else {
+        addLog("Cannot send — not connected to broker");
+      }
+    }
+  </script>
+
+</body>
+</html>
